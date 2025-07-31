@@ -2,6 +2,7 @@ from pdf2image import convert_from_bytes
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 import streamlit as st
+import numpy as np
 
 st.set_page_config(layout="wide")
 st.title("🖼️ PDF-Anzeige mit ROI-Auswahl")
@@ -20,11 +21,12 @@ img = pages[0].convert("RGB")
 # Vorschaubild kleiner skalieren (600px Breite)
 preview = img.copy()
 preview.thumbnail((600, 800))
-w, h = preview.size
+img_np = np.array(preview)
+h, w = img_np.shape[:2]
 st.write(f"Größe der Vorschau: {w}×{h}")
 
 canvas_result = st_canvas(
-    background_image=preview,
+    background_image=img_np,
     height=h,
     width=w,
     drawing_mode="rect",
@@ -36,9 +38,9 @@ canvas_result = st_canvas(
 if canvas_result.json_data and canvas_result.json_data["objects"]:
     rect = canvas_result.json_data["objects"][-1]
     x, y = int(rect["left"]), int(rect["top"])
-    w, h = int(rect["width"]), int(rect["height"])
+    rw, rh = int(rect["width"]), int(rect["height"])
     st.success("📐 Koordinaten:")
-    st.code(f"(x, y, w, h) = ({x}, {y}, {w}, {h})")
-    st.code(f"(left, upper, right, lower) = ({x}, {y}, {x+w}, {y+h})")
+    st.code(f"(x, y, w, h) = ({x}, {y}, {rw}, {rh})")
+    st.code(f"(left, upper, right, lower) = ({x}, {y}, {x+rw}, {y+rh})")
 else:
     st.info("Ziehe ein Rechteck, um Koordinaten zu erhalten.")
