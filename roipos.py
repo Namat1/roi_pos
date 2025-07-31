@@ -2,7 +2,6 @@ from pdf2image import convert_from_bytes
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 import streamlit as st
-import numpy as np
 
 st.set_page_config(layout="wide")
 st.title("🖼️ PDF-Anzeige mit ROI-Auswahl")
@@ -15,22 +14,18 @@ if not pdf_bytes:
 dpi = st.slider("DPI", 72, 300, 150)
 
 # Rendern der Seite 1
-try:
-    pages = convert_from_bytes(pdf_bytes.read(), dpi=dpi)
-    img = pages[0].convert("RGB")
-except Exception as e:
-    st.error(f"❌ Fehler beim Rendern der PDF-Seite: {e}")
-    st.stop()
+pages = convert_from_bytes(pdf_bytes.read(), dpi=dpi)
+img = pages[0].convert("RGB")
 
-# Vorschaubild skalieren
+# Vorschaubild kleiner skalieren (600px Breite)
 preview = img.copy()
-preview.thumbnail((600, 800))
-img_np = np.array(preview)
-h, w = img_np.shape[:2]
+preview.thumbnail((600, 800))  # verkleinert auf max 600x800
+w, h = preview.size
 st.write(f"Größe der Vorschau: {w}×{h}")
 
-# ✅ Trick: Übergabe über Dictionary, um ValueError zu vermeiden
-canvas_kwargs = dict(
+# ✅ KEIN NumPy, sondern PIL.Image übergeben
+canvas_result = st_canvas(
+    background_image=preview,
     height=h,
     width=w,
     drawing_mode="rect",
@@ -39,13 +34,6 @@ canvas_kwargs = dict(
     key="canvas"
 )
 
-if isinstance(img_np, np.ndarray):
-    canvas_kwargs["background_image"] = img_np
-
-# Zeichenfläche anzeigen
-canvas_result = st_canvas(**canvas_kwargs)
-
-# Rechteck auslesen
 if canvas_result.json_data and canvas_result.json_data["objects"]:
     rect = canvas_result.json_data["objects"][-1]
     x, y = int(rect["left"]), int(rect["top"])
