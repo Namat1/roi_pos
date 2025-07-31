@@ -1,4 +1,5 @@
-streamlit
-pdf2image 
-pillow 
-streamlit-drawable-canvas
+streamlit>=1.41,<2.0
+streamlit-drawable-canvas-fix>=0.9.7
+pdf2image>=1.17
+Pillow>=10.3
+
