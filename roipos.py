@@ -1,39 +1,72 @@
 import streamlit as st
 from pdf2image import convert_from_bytes
 from PIL import Image
+from streamlit_drawable_canvas import st_canvas
 import pytesseract
+import shutil
 
-st.set_page_config(layout="centered")
-st.title("🔍 OCR-Vorschau für Namensfeld")
+# Sicherstellen, dass Tesseract verfügbar ist
+TESS_CMD = shutil.which("tesseract")
+if TESS_CMD:
+    pytesseract.pytesseract.tesseract_cmd = TESS_CMD
+else:
+    st.error("❌ Tesseract nicht installiert. Bitte `tesseract-ocr` in packages.txt angeben.")
+    st.stop()
 
-# Datei-Upload
-pdf_file = st.file_uploader("📄 Dienstplan-PDF hochladen", type=["pdf"])
-dpi = st.slider("DPI für Rendern", 72, 300, 150)
+st.set_page_config(layout="wide")
+st.title("📄 PDF anzeigen & Rechteck für OCR ziehen")
 
-# ROI-Koordinaten für "Philipp Auer" (unten rechts bei 150 dpi)
-roi_box = (920, 1630, 240, 60)  # (x, y, w, h)
+pdf_file = st.file_uploader("PDF hochladen", type=["pdf"])
+dpi = st.slider("DPI zum Rendern", 72, 300, 150)
 
-if pdf_file:
-    # PDF in Bild konvertieren
-    pages = convert_from_bytes(pdf_file.read(), dpi=dpi)
-    img = pages[0].convert("RGB")
+if not pdf_file:
+    st.stop()
 
-    # ROI berechnen und ausschneiden
-    x, y, w, h = roi_box
-    scale = dpi / 150  # Skalierungsfaktor bei anderer DPI
-    x, y, w, h = int(x * scale), int(y * scale), int(w * scale), int(h * scale)
-    cropped = img.crop((x, y, x + w, y + h))
+# Seite rendern
+pages = convert_from_bytes(pdf_file.read(), dpi=dpi)
+img = pages[0].convert("RGB")
 
-    # Anzeige
-    st.image(img, caption="Gesamte PDF-Seite", use_column_width=True)
-    st.markdown("---")
-    st.image(cropped, caption=f"ROI ({x}, {y}, {w}, {h})", use_column_width=False)
+# Optional: verkleinern für Anzeige
+preview = img.copy()
+preview.thumbnail((1000, 1500))  # Vorschaugröße
+w, h = preview.size
 
-    # OCR-Vorschau
-    try:
-        text = pytesseract.image_to_string(cropped, lang="deu+eng")
-    except Exception:
-        text = pytesseract.image_to_string(cropped)
+# Canvas anzeigen
+canvas_result = st_canvas(
+    background_image=preview,
+    height=h,
+    width=w,
+    drawing_mode="rect",
+    stroke_color="red",
+    stroke_width=2,
+    key="ocr-canvas"
+)
 
-    st.markdown("### 🧾 OCR-Text im markierten Bereich:")
-    st.code(text.strip() or "(Kein Text erkannt)")
+# Wenn ein Rechteck gezeichnet wurde
+if canvas_result.json_data and canvas_result.json_data["objects"]:
+    rect = canvas_result.json_data["objects"][-1]
+    x = int(rect["left"])
+    y = int(rect["top"])
+    rw = int(rect["width"])
+    rh = int(rect["height"])
+
+    st.success(f"📐 Gezogenes Rechteck: (x={x}, y={y}, w={rw}, h={rh})")
+
+    # Entsprechend Originalgröße hochskalieren
+    scale_x = img.width / w
+    scale_y = img.height / h
+
+    orig_x = int(x * scale_x)
+    orig_y = int(y * scale_y)
+    orig_w = int(rw * scale_x)
+    orig_h = int(rh * scale_y)
+
+    roi_img = img.crop((orig_x, orig_y, orig_x + orig_w, orig_y + orig_h))
+
+    st.image(roi_img, caption="Ausgeschnittener Bereich (Originalgröße)")
+
+    text = pytesseract.image_to_string(roi_img, lang="deu+eng")
+    st.markdown("### 🧾 OCR-Text:")
+    st.code(text.strip() or "(kein Text erkannt)")
+else:
+    st.info("Bitte ein Rechteck auf dem PDF ziehen.")
