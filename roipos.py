@@ -1,45 +1,39 @@
+import streamlit as st
 from pdf2image import convert_from_bytes
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
-import streamlit as st
+import pytesseract
 
-st.set_page_config(layout="wide")
-st.title("🖼️ PDF-Anzeige mit ROI-Auswahl")
+st.set_page_config(layout="centered")
+st.title("🔍 OCR-Vorschau für Namensfeld")
 
-# Datei laden
-pdf_bytes = st.file_uploader("PDF hochladen", type=["pdf"])
-if not pdf_bytes:
-    st.stop()
+# Datei-Upload
+pdf_file = st.file_uploader("📄 Dienstplan-PDF hochladen", type=["pdf"])
+dpi = st.slider("DPI für Rendern", 72, 300, 150)
 
-dpi = st.slider("DPI", 72, 300, 150)
+# ROI-Koordinaten für "Philipp Auer" (unten rechts bei 150 dpi)
+roi_box = (920, 1630, 240, 60)  # (x, y, w, h)
 
-# Rendern der Seite 1
-pages = convert_from_bytes(pdf_bytes.read(), dpi=dpi)
-img = pages[0].convert("RGB")
+if pdf_file:
+    # PDF in Bild konvertieren
+    pages = convert_from_bytes(pdf_file.read(), dpi=dpi)
+    img = pages[0].convert("RGB")
 
-# Vorschaubild kleiner skalieren (600px Breite)
-preview = img.copy()
-preview.thumbnail((600, 800))  # verkleinert auf max 600x800
-w, h = preview.size
-st.write(f"Größe der Vorschau: {w}×{h}")
+    # ROI berechnen und ausschneiden
+    x, y, w, h = roi_box
+    scale = dpi / 150  # Skalierungsfaktor bei anderer DPI
+    x, y, w, h = int(x * scale), int(y * scale), int(w * scale), int(h * scale)
+    cropped = img.crop((x, y, x + w, y + h))
 
-# ✅ KEIN NumPy, sondern PIL.Image übergeben
-canvas_result = st_canvas(
-    background_image=preview,
-    height=h,
-    width=w,
-    drawing_mode="rect",
-    stroke_color="red",
-    stroke_width=2,
-    key="canvas"
-)
+    # Anzeige
+    st.image(img, caption="Gesamte PDF-Seite", use_column_width=True)
+    st.markdown("---")
+    st.image(cropped, caption=f"ROI ({x}, {y}, {w}, {h})", use_column_width=False)
 
-if canvas_result.json_data and canvas_result.json_data["objects"]:
-    rect = canvas_result.json_data["objects"][-1]
-    x, y = int(rect["left"]), int(rect["top"])
-    rw, rh = int(rect["width"]), int(rect["height"])
-    st.success("📐 Koordinaten:")
-    st.code(f"(x, y, w, h) = ({x}, {y}, {rw}, {rh})")
-    st.code(f"(left, upper, right, lower) = ({x}, {y}, {x+rw}, {y+rh})")
-else:
-    st.info("Ziehe ein Rechteck, um Koordinaten zu erhalten.")
+    # OCR-Vorschau
+    try:
+        text = pytesseract.image_to_string(cropped, lang="deu+eng")
+    except Exception:
+        text = pytesseract.image_to_string(cropped)
+
+    st.markdown("### 🧾 OCR-Text im markierten Bereich:")
+    st.code(text.strip() or "(Kein Text erkannt)")
