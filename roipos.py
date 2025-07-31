@@ -15,16 +15,29 @@ if not pdf_bytes:
 dpi = st.slider("DPI", 72, 300, 150)
 
 # Rendern der Seite 1
-pages = convert_from_bytes(pdf_bytes.read(), dpi=dpi)
-img = pages[0].convert("RGB")
+try:
+    pages = convert_from_bytes(pdf_bytes.read(), dpi=dpi)
+    img = pages[0].convert("RGB")
+except Exception as e:
+    st.error(f"❌ Fehler beim Rendern der PDF-Seite: {e}")
+    st.stop()
 
-# Vorschaubild kleiner skalieren (600px Breite)
+# Vorschau kleiner skalieren
 preview = img.copy()
-preview.thumbnail((600, 800))
-img_np = np.array(preview)
+preview.thumbnail((600, 800))  # Seite auf max 600 × 800 skalieren
+
+try:
+    img_np = np.array(preview)
+    if img_np.ndim != 3 or img_np.shape[2] not in [3, 4]:
+        raise ValueError(f"Ungültiges Bildformat: {img_np.shape}")
+except Exception as e:
+    st.error(f"❌ Fehler beim Umwandeln in NumPy: {e}")
+    st.stop()
+
 h, w = img_np.shape[:2]
 st.write(f"Größe der Vorschau: {w}×{h}")
 
+# Canvas mit geprüftem Bild
 canvas_result = st_canvas(
     background_image=img_np,
     height=h,
@@ -35,6 +48,7 @@ canvas_result = st_canvas(
     key="canvas"
 )
 
+# Rechteck auslesen
 if canvas_result.json_data and canvas_result.json_data["objects"]:
     rect = canvas_result.json_data["objects"][-1]
     x, y = int(rect["left"]), int(rect["top"])
