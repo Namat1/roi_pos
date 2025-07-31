@@ -3,3 +3,4 @@ streamlit-drawable-canvas-fix>=0.9.7
 pdf2image>=1.17
 Pillow>=10.3
 
+pytesseract
