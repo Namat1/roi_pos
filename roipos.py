@@ -22,24 +22,15 @@ except Exception as e:
     st.error(f"❌ Fehler beim Rendern der PDF-Seite: {e}")
     st.stop()
 
-# Vorschau kleiner skalieren
+# Vorschaubild skalieren
 preview = img.copy()
-preview.thumbnail((600, 800))  # Seite auf max 600 × 800 skalieren
-
-try:
-    img_np = np.array(preview)
-    if img_np.ndim != 3 or img_np.shape[2] not in [3, 4]:
-        raise ValueError(f"Ungültiges Bildformat: {img_np.shape}")
-except Exception as e:
-    st.error(f"❌ Fehler beim Umwandeln in NumPy: {e}")
-    st.stop()
-
+preview.thumbnail((600, 800))
+img_np = np.array(preview)
 h, w = img_np.shape[:2]
 st.write(f"Größe der Vorschau: {w}×{h}")
 
-# Canvas mit geprüftem Bild
-canvas_result = st_canvas(
-    background_image=img_np,
+# ✅ Trick: Übergabe über Dictionary, um ValueError zu vermeiden
+canvas_kwargs = dict(
     height=h,
     width=w,
     drawing_mode="rect",
@@ -47,6 +38,12 @@ canvas_result = st_canvas(
     stroke_width=2,
     key="canvas"
 )
+
+if isinstance(img_np, np.ndarray):
+    canvas_kwargs["background_image"] = img_np
+
+# Zeichenfläche anzeigen
+canvas_result = st_canvas(**canvas_kwargs)
 
 # Rechteck auslesen
 if canvas_result.json_data and canvas_result.json_data["objects"]:
